@@ -1,0 +1,110 @@
+---
+title: "Practical Machine Leaning Project"
+author: "Sunny Pan"
+date: "3/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+People regular quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will be to use data from accelerometers to build a prediction model to predict 20 different test cases. 
+
+## Data Processing
+```{r include=FALSE}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(reshape2)
+library(caret)
+library(rpart)
+library(rattle)
+set.seed(123)
+```
+
+### 1.Load the data.
+
+Load the data:
+```{r echo=TRUE}
+urlTraining <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+urlTesting <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+training = read.csv(urlTraining, header = T, na.strings = c("", "NA"))
+testing = read.csv(urlTesting, header = T, na.strings = c("", "NA"))
+dim(training)
+dim(testing)
+```
+
+We can see there are 19622 observations and 160 variables in the training data, 20 rows in testing data.
+
+### 2.Clean the data.
+```{r echo=TRUE}
+str(training)
+```
+We look into the data. We can see some colums containing many NA value in the data and some columns that are unrelative with the outcome. They are useless, we have to remove them.
+
+```{r echo=TRUE}
+training <- training[,colMeans(is.na(training)) < 0.9]
+training <- training[,-c(1:7)]
+testing <- testing[,colMeans(is.na(testing)) < 0.9]
+testing <- testing[,-c(1:7)]
+dim(training)
+```
+
+After clearning data, the training data contains 53 variables.
+
+### 3.Model comparison.
+In order to find out the best accuracy, We will test 3 different models: classification tree, random forests and gradiant boosting method.
+
+- Split training data into a training set and validation set.
+```{r echo=TRUE}
+inTrain <- createDataPartition(y=training$classe, p=0.7, list = FALSE)
+train <- training[inTrain,]
+valid <- training[-inTrain,]
+```
+
+- Set up control using 3-fold cross validation.
+```{r echo=TRUE}
+myControl <- trainControl(method = "cv", number = 3)
+```
+
+- Classification tree
+```{r echo=TRUE}
+modCT <- train(classe~., data=train, method="rpart", trControl=myControl)
+fancyRpartPlot(modCT$finalModel)
+```
+
+```{r echo=TRUE}
+cmCT <- confusionMatrix(valid$classe, predict(modCT, valid))
+cmCT$overall[1]
+```
+
+The accuracy of tree model is 50%. The accuracy is low.
+
+- gradiant boosting method
+```{r echo=TRUE}
+modGBM <- train(classe~., data=train, method="gbm", trControl=myControl, verbose = F)
+cmGBM <- confusionMatrix(valid$classe, predict(modGBM, valid))
+cmGBM$overall[1]
+```
+
+The accuracy of GBM model is 96.16%.
+
+- random forests
+```{r echo=TRUE}
+modRF <- train(classe~., data=train, method="rf", trControl=myControl)
+cmRF <- confusionMatrix(valid$classe, predict(modRF, valid))
+cmRF$overall[1]
+```
+
+The accuracy of RF model is 99.24%.
+
+## Conclusion
+
+Comparing these three model, we find the Random Forests model is the best one, with 99.24% accuracy and 0.76% out of sample error rate. We will use the RF model to predict the test data.
+
+```{r echo=TRUE}
+TestPred <- predict(modRF,newdata=testing)
+TestPred
+```
